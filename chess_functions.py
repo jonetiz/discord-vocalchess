@@ -6,15 +6,19 @@ import io
 from svglib.svglib import svg2rlg
 from reportlab.graphics import renderPM
 
+class ChessPlayer:
+    def __init__(self, user: discord.User, elo: int):
+        self.user = user
+        self.elo = elo
+
 class DiscordChessGame:
-    moves = []
-    message: discord.Interaction
-    def __init__(self, channel, challenger: discord.User, other_player: discord.User):
+    def __init__(self, channel, white: ChessPlayer, black: ChessPlayer):
         self.game = chess.Board()
         self.channel = channel
-        self.challenger = challenger
-        self.other_player = other_player
-
+        self.white = white
+        self.black = black
+        self.moves = []
+        self.message: discord.Interaction
 
     def get_board_image(self, size=1800):
         lastmove=None
@@ -22,6 +26,7 @@ class DiscordChessGame:
         if self.game.move_stack:
             lastmove=self.game.move_stack[-1]
             if self.game.is_check():
+                print("CHECK!")
                 check = self.game.king(self.game.turn)
 
         img = chess.svg.board(
@@ -33,7 +38,7 @@ class DiscordChessGame:
             png_bytes = renderPM.drawToString(drawing, fmt='PNG')
         except:
             pass
-        png_io = io.BytesIO()
+        png_io = io.BytesIO(png_bytes)
         return png_io
     
     def get_moves(self, nl = True):
@@ -53,15 +58,17 @@ class DiscordChessGame:
         return string_to_return
     
     def get_embed(self):
-        players = f"{self.challenger} vs. {self.other_player}"
+        players = f"{self.white.user} ({self.white.elo}) vs. {self.black.user} ({self.black.elo})"
 
         moves = self.get_moves()
 
         embed = discord.Embed()
         embed.set_author(name=f"Chess Game - {players}")
+        if self.game.is_checkmate():
+            embed.set_author(name=f"Chess Game - {players} - <WINNER> WINS!")
         embed.set_image(url="attachment://board.png")
         embed.add_field(name="Moves", value=f"```{moves}```", inline=True)
-        embed.set_footer(text=f"Game Started by {self.challenger}\non {datetime.now().strftime('%B %d, %Y')}")
+        embed.set_footer(text=f"Game started \non {datetime.now().strftime('%B %d, %Y')}")
 
         dict = {
             "embed": embed,
