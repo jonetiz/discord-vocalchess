@@ -26,8 +26,6 @@ class VocalChessClient(discord.Client):
                 except:
                     pass
                 else:
-                    game.moves.append(message.content)
-                    
                     # if it's a cpu game, make cpu move
                     if game.black.user is self.user or game.white.user is self.user:
                         #start = time.time()
@@ -49,15 +47,9 @@ class VocalChessClient(discord.Client):
                         # push uci to the game
                         game.game.push_uci(move)
 
-                        # append to moves list
-                        game.moves.append(move)
-
                     await message.delete()
                     await game.update_message()
 
     async def setup_hook(self):
         self.tree.copy_global_to(guild=MY_GUILD)
         await self.tree.sync(guild=MY_GUILD)
-
-    async def test(self, interaction: discord.Interaction):
-        await interaction.response.send_message(f'Hello, {interaction.user.mention}!')

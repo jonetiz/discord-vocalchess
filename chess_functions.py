@@ -1,10 +1,9 @@
 import discord
 from datetime import datetime
 import chess
-import chess.svg
+import chess.pgn
 import io
-from svglib.svglib import svg2rlg
-from reportlab.graphics import renderPM
+from board_image import *
 
 class ChessPlayer:
     def __init__(self, user: discord.User, elo: int):
@@ -17,43 +16,56 @@ class DiscordChessGame:
         self.channel = channel
         self.white = white
         self.black = black
-        self.moves = []
         self.message: discord.Interaction
 
     def get_board_image(self, size=1800):
-        lastmove=None
-        check=None
+        lastmove = ()
+
         if self.game.move_stack:
-            lastmove=self.game.move_stack[-1]
-            if self.game.is_check():
-                print("CHECK!")
-                check = self.game.king(self.game.turn)
+            last_move = self.game.move_stack[-1]
+            lastmove = (last_move.from_square, last_move.to_square)
 
-        img = chess.svg.board(
-            self.game, size=size, lastmove=lastmove, check=check
-        )
-        drawing = svg2rlg(io.StringIO(img))
+        board_img = ChessBoardImage(pieces, self.game.piece_map(), lastmove)
+        img_io = io.BytesIO()
+        board_img.img.save(img_io, "jpeg")
+        img_io.seek(0)
 
-        try:
-            png_bytes = renderPM.drawToString(drawing, fmt='PNG')
-        except:
-            pass
-        png_io = io.BytesIO(png_bytes)
-        return png_io
-    
+        return img_io
+
     def get_moves(self, nl = True):
         """Returns a string of moves in standard algebraic notation"""
         string_to_return = "1. _"
         line_ctr = 1
-        if self.moves:
+        moves = []
+        tempgame = chess.Board()
+        for move in self.game.move_stack:
+            # san = ""
+            # if move.drop:
+            #     if move.drop != chess.PAWN:
+            #         san += chess.piece_symbol(move.drop).upper()
+            #     san += move.to_square
+            
+            # if move.promotion:
+            #     san += "=" + move.promotion
+            
+            # if self.game.is_kingside_castling(move):
+            #     san = "O-O"
+            # elif self.game.is_queenside_castling(move):
+            #     san = "O-O-O"
+
+            # capture = self.game.is_capture(move)
+            san = tempgame.san_and_push(move)
+            moves.append(san)
+
+        if moves:
             string_to_return = ""
-            for i,j in zip(self.moves[0::2], self.moves[1::2]):
+            for i,j in zip(moves[0::2], moves[1::2]):
                 str = f"{line_ctr}. {i} {j} "
                 str += "\n" if nl else ""
                 string_to_return += str
                 line_ctr += 1
-            if len(self.moves) % 2 != 0:
-                string_to_return += f"{line_ctr}. {self.moves[-1]}"
+            if len(moves) % 2 != 0:
+                string_to_return += f"{line_ctr}. {moves[-1]}"
 
         return string_to_return
     
@@ -65,7 +77,11 @@ class DiscordChessGame:
         embed = discord.Embed()
         embed.set_author(name=f"Chess Game - {players}")
         if self.game.is_checkmate():
-            embed.set_author(name=f"Chess Game - {players} - <WINNER> WINS!")
+            if self.game.turn:
+                winner = self.black.user.display_name.upper()
+            else:
+                winner = self.white.user.display_name.upper()
+            embed.set_author(name=f"Chess Game - {players} - {winner} WINS!")
         embed.set_image(url="attachment://board.png")
         embed.add_field(name="Moves", value=f"```{moves}```", inline=True)
         embed.set_footer(text=f"Game started \non {datetime.now().strftime('%B %d, %Y')}")
