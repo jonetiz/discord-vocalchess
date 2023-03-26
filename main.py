@@ -12,6 +12,21 @@ def main():
     intents.message_content = True
 
     client = VocalChessClient(intents=intents)
+    
+    @client.tree.command()
+    async def player_stats(interaction: discord.Interaction, user: typing.Optional[discord.User]):
+        """Give player statistics"""
+        if not user:
+            user = interaction.user
+
+        player = ChessPlayer(user)
+
+        embed = discord.Embed()
+        embed.set_author(name=f"VocalChess Statistics - {user.display_name}")
+        embed.add_field(name="Elo Rating", value=f"{player.elo}", inline=True)
+        embed.add_field(name="Wins / Losses / Draws", value=f"{player.wins} / {player.loss} / {player.draw}", inline=True)
+
+        await interaction.response.send_message(embed = embed)
 
     @client.tree.command()
     async def challenge_cpu(interaction: discord.Interaction, color: typing.Optional[typing.Literal['white', 'black']] = 'white', elo: typing.Optional[int] = 1500):
@@ -19,11 +34,11 @@ def main():
 
         # create appropriate ChessPlayer objects
         if color == 'white':
-            white_player = ChessPlayer(interaction.user, 1500)
-            black_player = ChessPlayer(client.user, elo)
+            white_player = ChessPlayer(interaction.user)
+            black_player = ChessPlayer(client.user, elo, bot=True)
         else:
-            white_player = ChessPlayer(client.user, elo)
-            black_player = ChessPlayer(interaction.user, 1500)
+            white_player = ChessPlayer(client.user, elo, bot=True)
+            black_player = ChessPlayer(interaction.user)
 
         # create chess game instance
         game = DiscordChessGame(channel = interaction.channel_id, white = white_player, black = black_player)
@@ -45,14 +60,15 @@ def main():
 
         game.message = interaction
 
+    @client.tree.command()
     async def challenge(interaction: discord.Integration, opponent: discord.User, color: typing.Optional[typing.Literal['white', 'black']] = 'white'):
         """Challenge another user to a chess game."""
         if color == 'white':
-            white_player = ChessPlayer(interaction.user, 1500)
-            black_player = ChessPlayer(opponent, 1500)
+            white_player = ChessPlayer(interaction.user)
+            black_player = ChessPlayer(opponent)
         else:
-            white_player = ChessPlayer(opponent, 1500)
-            black_player = ChessPlayer(interaction.user, 1500)
+            white_player = ChessPlayer(opponent)
+            black_player = ChessPlayer(interaction.user)
 
         game = DiscordChessGame(channel = interaction.channel_id, white = white_player, black = black_player)
 
@@ -63,17 +79,6 @@ def main():
         await interaction.response.send_message(file = e['file'], embed = e['embed'])
 
         game.message = interaction
-
-    @client.event
-    async def on_message_delete(message: discord.Message):
-        # if it's an interaction
-        if message.interaction:
-            message_id = message.interaction.id
-            for game in client.games:
-                # if it's one of our games, remove it from the tracker
-                if message_id == game.message.id:
-                    print(f"Deleted {game}")
-                    client.games.remove(game)
 
     client.run(os.getenv('DISCORD_BOT_TOKEN'))
 

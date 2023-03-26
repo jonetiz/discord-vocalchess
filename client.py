@@ -47,9 +47,22 @@ class VocalChessClient(discord.Client):
                         # push uci to the game
                         game.game.push_uci(move)
 
+                    # try to end game if it's over
+                    game.end_game()
+
                     await message.delete()
                     await game.update_message()
 
     async def setup_hook(self):
         self.tree.copy_global_to(guild=MY_GUILD)
         await self.tree.sync(guild=MY_GUILD)
+
+    async def on_message_delete(self, message: discord.Message):
+        # if it's an interaction
+        if message.interaction:
+            message_id = message.interaction.id
+            for game in self.games:
+                # if it's one of our games, remove it from the tracker
+                if message_id == game.message.id:
+                    print(f"Deleted {game}")
+                    self.games.remove(game)

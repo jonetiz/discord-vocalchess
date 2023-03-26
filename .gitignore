@@ -151,3 +151,4 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 stockfish-windows-2022-x86-64-avx2.exe
+database.db
