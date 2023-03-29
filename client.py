@@ -21,11 +21,7 @@ class VocalChessClient(discord.Client):
         for game in self.games:
             if message.channel.id == game.channel and ((message.author.id == game.white.user.id and game.game.turn) or (message.author.id == game.black.user.id and not game.game.turn)):
                 # If the message is in the same channel as the game as the author is the challenger or player, attempt to make a move (if it's a valid move)
-                try:
-                    game.game.push_san(message.content)
-                except:
-                    pass
-                else:
+                if game.try_move(message.content):
                     # if it's a cpu game, make cpu move
                     if game.black.user is self.user or game.white.user is self.user:
                         #start = time.time()

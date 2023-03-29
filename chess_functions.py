@@ -195,3 +195,49 @@ class DiscordChessGame:
     async def update_message(self):
         e = self.get_embed()
         await self.message.edit_original_response(attachments = [e['file']], embed = e['embed'])
+    
+    def try_move(self, move: str):
+        """Try resolving a move from a string (likely discord message content). Returns True if successful, False if not."""
+        # First try algebraic notation
+        try:
+            self.game.push_san(move)
+        except:
+            # Try UCI notation
+            try:
+                self.game.push_uci(move)
+            except:
+                # if algebraic and universal chess notation both failed, try resolving using our own methods
+
+                # make move string all lower-case
+                move_arr = move.lower().split(" ")
+
+                piece_aliases = {
+                    "K": ["king"],
+                    "Q": ["queen"],
+                    "B": ["bishop"],
+                    "N": ["knight", "nite", "night", "horse"],
+                    "R": ["rook"],
+                    "P": ["pawn", "a", "b", "c", "d", "e", "f", "g", "h"]
+                }
+
+                operations = ["x", "to", "takes", "take", "capture", "captures"]
+
+                # resolve the operation
+                known_operation = ""
+                for word in move_arr:
+                    if word in operations:
+                        known_operation = word
+                        break
+                
+                # TODO: want functionality including but not limited to:
+                # "Knight takes f6", "Knight takes on f6", "Knight f6"
+                # "Queen takes Queen", "Knight takes Queen"
+                move_made = False
+                
+                return move_made
+            else:
+                # if UCI worked, return True
+                return True
+        else:
+            # if it worked, return True
+            return True
