@@ -44,6 +44,7 @@ def test(move):
                 else:
                     return "O-O"
         elif word in ("en-passant", "ep", "e.p.", "passant", "pasant"):
+            # if we're trying en passant
             if not game.has_legal_en_passant():
                 raise chess.IllegalMoveError(f'There is no legal en-passant in the current position.')
             
@@ -51,7 +52,7 @@ def test(move):
                 # logically, there can only be one legal en-passant at a time, so we only need to take the first legal en-passant
                 return game.san_and_push(move)
         
-    # move_to = last word in move_arr
+    # move_to = square id of last "word" in move_arr, must be a square name
     move_to = None
     if move_arr[-1] not in chess.SQUARE_NAMES:
         raise chess.IllegalMoveError(f'{move_arr[-1]} is not a valid square.')
@@ -77,6 +78,7 @@ def test(move):
 
     # resolve the piece
     for piece in piece_aliases:
+        # for each piece_alias
         for alias in piece_aliases[piece]:
             if move_arr[0] == alias:
                 #  print(piece)
@@ -125,7 +127,7 @@ def test(move):
                         print(square)
                         break
 
-    print(piece_to_move)
+    # print(piece_to_move)
 
     # need to explicitly say "is not None" in case piece_to_move = 0 (which it can be for square a1)
     if piece_to_move is not None:
