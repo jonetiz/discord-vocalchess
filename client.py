@@ -3,7 +3,7 @@ from discord import app_commands
 from chess_functions import DiscordChessGame
 from typing import List
 import stockfish
-#import time
+import asyncio
 
 MY_GUILD = discord.Object(id=1078456129580957779)
 
@@ -21,7 +21,14 @@ class VocalChessClient(discord.Client):
         for game in self.games:
             if message.channel.id == game.channel and ((message.author.id == game.white.user.id and game.game.turn) or (message.author.id == game.black.user.id and not game.game.turn)):
                 # If the message is in the same channel as the game as the author is the challenger or player, attempt to make a move (if it's a valid move)
-                if game.try_move(message.content):
+                try:
+                    game.try_move(message.content)
+                except Exception as e:
+                    msg: discord.Message = await message.reply(f"{e}\nThe /move_help command may help if you are confused.")
+                    await asyncio.sleep(5)
+                    await msg.delete()
+                    await message.delete() 
+                else:
                     # if it's a cpu game, make cpu move
                     if game.black.user is self.user or game.white.user is self.user:
                         #start = time.time()
