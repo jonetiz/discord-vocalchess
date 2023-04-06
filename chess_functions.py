@@ -212,15 +212,31 @@ class DiscordChessGame:
                 move_arr = move.lower().split(" ")
 
                 piece_aliases = {
-                    "K": ["king"],
-                    "Q": ["queen"],
-                    "B": ["bishop"],
-                    "N": ["knight", "nite", "night", "horse"],
-                    "R": ["rook"],
-                    "P": ["pawn", "a", "b", "c", "d", "e", "f", "g", "h"]
+                    "6": ["k", "king"],
+                    "5": ["q", "queen"],
+                    "3": ["b", "bishop"],
+                    "2": ["n", "k", "knight", "nite", "night", "horse"],
+                    "4": ["r", "rook"],
+                    "1": ["p", "pawn", "a", "b", "c", "d", "e", "f", "g", "h"]
                 }
 
                 operations = ["x", "to", "takes", "take", "capture", "captures"]
+                # print(move_arr)
+                
+                # a set of squares on which pieces may be moved, populated by piece resolution below
+                candidates_to_move: chess.SquareSet
+
+                # resolve the piece
+                for piece in piece_aliases:
+                    for alias in piece_aliases[piece]:
+                        for word in move_arr:
+                            if word == alias:
+                                print(piece)
+                                # find all of the pieces that match the given piece
+                                candidates_to_move = self.game.pieces(piece, self.game.turn)
+
+                print(candidates_to_move)
+                
 
                 # resolve the operation
                 known_operation = ""
