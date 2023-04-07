@@ -249,10 +249,36 @@ class DiscordChessGame:
                         if not self.game.has_legal_en_passant():
                             raise chess.IllegalMoveError(f'There is no legal en-passant in the current position.')
                         
+                        legal_moves: list[chess.Move] = []
                         for move in self.game.generate_legal_ep():
-                            # logically, there can only be one legal en-passant at a time, so we only need to take the first legal en-passant
-                            return self.game.san_and_push(move)
-                    
+                            legal_moves.append(move)
+
+                        move_to_play: chess.Move = None
+                        for move in legal_moves:
+                            if not move_to_play:
+                                move_to_play = move
+                            else:
+                                # if there are multiple legal en-passants
+                                move_to_play = None
+                                for word in move_arr:
+                                    # go through each word in the message
+                                    if word in chess.FILE_NAMES:
+                                        # if the word is a file, determine which file it is
+                                        for i, file in enumerate(chess.FILE_NAMES):
+                                            # track down the file the user said
+                                            if file == word:
+                                                for m in legal_moves:
+                                                    # if this move's piece file is i, just do the thingy
+                                                    if chess.square_file(m.from_square) == i:
+                                                        move_to_play = m
+                                                        break
+                            
+                        # if there is no en-passant move defined
+                        if not move_to_play:
+                            raise chess.AmbiguousMoveError(f'There are multiple or no legal en-passants in the current position. Clarify by typing which piece is to play en-passant.')
+
+                        return self.game.san_and_push(move_to_play)
+
                 # move_to = square id of last "word" in move_arr, must be a square name
                 move_to = None
                 if move_arr[-1] not in chess.SQUARE_NAMES:

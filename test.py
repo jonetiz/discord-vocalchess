@@ -5,7 +5,7 @@ def test(move):
 
     # TESTING ONLY
     game = chess.Board()
-    game.set_fen('rnbqkbn1/pppp1ppP/8/4pP2/8/8/PPPP2P1/R3K2R w KQq e6 1 1')
+    game.set_fen('rnbqkbn1/pppp1ppP/8/3PpP2/8/8/PPP3P1/R3K2R w KQq e6 1 1')
     ######
 
     # split input string by spaces, hyphens, and underscores
@@ -48,9 +48,36 @@ def test(move):
             if not game.has_legal_en_passant():
                 raise chess.IllegalMoveError(f'There is no legal en-passant in the current position.')
             
+            legal_moves: list[chess.Move] = []
             for move in game.generate_legal_ep():
-                # logically, there can only be one legal en-passant at a time, so we only need to take the first legal en-passant
-                return game.san_and_push(move)
+                legal_moves.append(move)
+
+            move_to_play: chess.Move = None
+            for move in legal_moves:
+                if not move_to_play:
+                    move_to_play = move
+                else:
+                    # if there are multiple legal en-passants
+                    move_to_play = None
+                    for word in move_arr:
+                        # go through each word in the message
+                        if word in chess.FILE_NAMES:
+                            # if the word is a file, determine which file it is
+                            for i, file in enumerate(chess.FILE_NAMES):
+                                # track down the file the user said
+                                if file == word:
+                                    for m in legal_moves:
+                                        # if this move's piece file is i, just do the thingy
+                                        if chess.square_file(m.from_square) == i:
+                                            move_to_play = m
+                                            break
+                
+            # if there is no en-passant move defined
+            if not move_to_play:
+                raise chess.AmbiguousMoveError(f'There are multiple or no legal en-passants in the current position. Clarify by typing which piece is to play en-passant.')
+
+            return game.san_and_push(move_to_play)
+            
         
     # move_to = square id of last "word" in move_arr, must be a square name
     move_to = None
@@ -153,4 +180,5 @@ def test(move):
 
         return game.san_and_push(move_to_play)
         
-print(test("h promotes to knight h8"))
+print(test("f en-passant"))
+print(test("en-passant d"))
