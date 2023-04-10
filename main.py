@@ -2,18 +2,15 @@ from client import *
 import os
 from dotenv import load_dotenv
 from chess_functions import DiscordChessGame, ChessPlayer
-import typing
 
 def main():
     # load environment variables from .env
     load_dotenv()
 
-    intents = discord.Intents.default()
-    intents.message_content = True
+    client = VocalChessClient()
+    vc_connections = {}
 
-    client = VocalChessClient(intents=intents)
-    
-    @client.tree.command()
+    @client.command()
     async def move_help(interaction: discord.Interaction):
         """Give the user information on how to move"""
         embed = discord.Embed()
@@ -33,8 +30,8 @@ def main():
 
         await interaction.response.send_message(embed = embed, ephemeral=True)
 
-    @client.tree.command()
-    async def player_stats(interaction: discord.Interaction, user: typing.Optional[discord.User]):
+    @client.command()
+    async def player_stats(interaction: discord.Interaction, user: discord.Option(discord.User) = None):
         """Give player statistics"""
         if not user:
             user = interaction.user
@@ -48,8 +45,9 @@ def main():
 
         await interaction.response.send_message(embed = embed)
 
-    @client.tree.command()
-    async def challenge_cpu(interaction: discord.Interaction, color: typing.Optional[typing.Literal['white', 'black']] = 'white', elo: typing.Optional[int] = 1500):
+    @discord.guild_only()
+    @client.command()
+    async def challenge_cpu(interaction: discord.Interaction, color: discord.Option(str, choices=['white', 'black']) = 'white', elo: discord.Option(int) = 1500):
         """Challenge the CPU to a chess game."""
 
         # create appropriate ChessPlayer objects
@@ -78,10 +76,11 @@ def main():
 
         await interaction.response.send_message(file = e['file'], embed = e['embed'])
 
-        game.message = interaction
+        game.ctx = interaction
 
-    @client.tree.command()
-    async def challenge(interaction: discord.Integration, opponent: discord.User, color: typing.Optional[typing.Literal['white', 'black']] = 'white'):
+    @discord.guild_only()
+    @client.command()
+    async def challenge(interaction: discord.Integration, opponent: discord.Option(discord.User), color: discord.Option(str, choices=['white', 'black']) = 'white'):
         """Challenge another user to a chess game."""
         if color == 'white':
             white_player = ChessPlayer(interaction.user)
@@ -98,7 +97,45 @@ def main():
 
         await interaction.response.send_message(file = e['file'], embed = e['embed'])
 
-        game.message = interaction
+        game.ctx = interaction
+
+    @discord.guild_only()
+    @client.command()
+    async def join(interaction: discord.Interaction):
+        voice = interaction.user.voice
+
+        if not voice:
+            await interaction.response.send_message("You aren't in a voice channel!", ephemeral=True)
+
+        vc = await voice.channel.connect()
+        vc_connections.update({interaction.guild.id: vc})
+
+        async def once_done(sink: discord.sinks, channel: discord.TextChannel, *args):
+            recorded_users = [  # A list of recorded users
+                f"<@{user_id}>"
+                for user_id, audio in sink.audio_data.items()
+            ]
+            await sink.vc.disconnect()  # Disconnect from the voice channel.
+            files = [discord.File(audio.file, f"{user_id}.{sink.encoding}") for user_id, audio in sink.audio_data.items()]  # List down the files.
+            await channel.send(f"finished recording audio for: {', '.join(recorded_users)}.", files=files)  # Send a message with the accumulated files.
+
+        vc.start_recording(
+            discord.sinks.WaveSink(),
+            once_done,
+            interaction.channel
+        )
+
+        await interaction.response.send_message("Started recording!")
+
+    @discord.guild_only()
+    @client.command()
+    async def stop_recording(interaction: discord.Interaction):
+        if interaction.guild.id in vc_connections:  # Check if the guild is in the cache.
+            vc = vc_connections[interaction.guild.id]
+            vc.stop_recording()  # Stop recording, and call the callback (once_done).
+            del vc_connections[interaction.guild.id]  # Remove the guild from the cache..
+        else:
+            await interaction.response.send_message("I am currently not recording here.", ephemeral=True)  # Respond with this if we aren't recording.
 
     client.run(os.getenv('DISCORD_BOT_TOKEN'))
 

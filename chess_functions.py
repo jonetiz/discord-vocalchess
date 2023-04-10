@@ -8,45 +8,44 @@ import sqlite3
 import re
 
 class ChessPlayer:
-    def __init__(self, user: discord.User, elo: int = 1500, bot: bool = False):
+    def __init__(self, user: discord.User, elo: int = 1500, wins: int = 0, loss: int = 0, draw: int = 0, bot: bool = False):
         self.user = user
         self.bot = bot
-        if not self.load() or self.bot:
-            self.elo = elo
-            self.wins = 0
-            self.loss = 0
-            self.draw = 0
+        self.elo = elo
+        self.wins = wins
+        self.loss = loss
+        self.draw = draw
 
     def load(self):
-        conn = sqlite3.connect("database.db")
-        cur = conn.cursor()
-        cur.execute(f"""
-            CREATE TABLE IF NOT EXISTS users (id INT PRIMARY KEY, elo INT, wins INT, loss INT, draw INT)
-        """)
-        cur.execute(f"""
-            SELECT * FROM users WHERE id = {self.user.id}
-        """)
-        results = cur.fetchone()
-        if results:
-            self.elo = results[1]
-            self.wins = results[2]
-            self.loss = results[3]
-            self.draw = results[4]
-            return True
-        else:
-            return False
+        with sqlite3.connect("database.db") as conn:
+            conn.execute(f"""
+                CREATE TABLE IF NOT EXISTS users (id INT PRIMARY KEY, elo INT, wins INT, loss INT, draw INT)
+            """)
+            conn.commit()
+
+            with conn.execute(f"""
+                    SELECT * FROM users WHERE id = {self.user.id}
+                """) as cursor:
+                results = cursor.fetchone()
+                if results:
+                    self.elo = results[1]
+                    self.wins = results[2]
+                    self.loss = results[3]
+                    self.draw = results[4]
+                    return True
+                else:
+                    return False
 
     def save(self):
-        conn = sqlite3.connect("database.db")
-        cur = conn.cursor()
-        cur.execute(f"""
-            CREATE TABLE IF NOT EXISTS users (id INT PRIMARY KEY, elo INT, wins INT, loss INT, draw INT)
-        """)
-        cur.execute(f"""
-            INSERT INTO users (id, elo, wins, loss, draw) VALUES ({self.user.id}, {self.elo}, {self.wins}, {self.loss}, {self.draw})
-            ON CONFLICT(id) DO UPDATE SET elo = {self.elo}, wins = {self.wins}, loss = {self.loss}, draw = {self.draw} WHERE id = {self.user.id}
-        """)
-        conn.commit()
+        with sqlite3.connect("database.db") as conn:
+            conn.execute(f"""
+                CREATE TABLE IF NOT EXISTS users (id INT PRIMARY KEY, elo INT, wins INT, loss INT, draw INT)
+            """)
+            conn.execute(f"""
+                INSERT INTO users (id, elo, wins, loss, draw) VALUES ({self.user.id}, {self.elo}, {self.wins}, {self.loss}, {self.draw})
+                ON CONFLICT(id) DO UPDATE SET elo = {self.elo}, wins = {self.wins}, loss = {self.loss}, draw = {self.draw} WHERE id = {self.user.id}
+            """)
+            conn.commit()
 
 class DiscordChessGame:
     def __init__(self, channel, white: ChessPlayer, black: ChessPlayer):
@@ -54,7 +53,7 @@ class DiscordChessGame:
         self.channel = channel
         self.white = white
         self.black = black
-        self.message: discord.Interaction
+        self.ctx: discord.ApplicationContext
 
     def get_board_image(self, size=1800):
         lastmove = ()
@@ -195,7 +194,7 @@ class DiscordChessGame:
 
     async def update_message(self):
         e = self.get_embed()
-        await self.message.edit_original_response(attachments = [e['file']], embed = e['embed'])
+        await self.ctx.edit(file = e['file'], embed = e['embed'])
     
     def try_move(self, move: str):
         """Try resolving a move from a string (likely discord message content). Returns True if successful, False if not."""
