@@ -7,16 +7,18 @@ import asyncio
 MY_GUILD = discord.Object(id=1078456129580957779)
 
 class VocalChessClient(discord.Bot):
-    engine = stockfish.Stockfish(path="stockfish-windows-2022-x86-64-avx2.exe", depth=15)
+    engine = stockfish.Stockfish(path="stockfish-windows-2022-x86-64-avx2.exe", depth=18)
     def __init__(self, *args, **kwargs):
-        super().__init__(intents=discord.Intents.default())
+        intents = discord.Intents.default()
+        intents.message_content = True # required to use message.content in on_message
+        super().__init__(intents=intents)
         self.games: List[DiscordChessGame] = []
 
     async def on_ready(self):
         print(f'Logged on as {self.user}!')
+        await self.change_presence(activity=discord.Game("Chess"))
 
     async def on_message(self, message: discord.Message):
-        print(message)
         for game in self.games:
             if message.channel.id == game.channel and ((message.author.id == game.white.user.id and game.game.turn) or (message.author.id == game.black.user.id and not game.game.turn)):
                 # If the message is in the same channel as the game as the author is the challenger or player, attempt to make a move (if it's a valid move)

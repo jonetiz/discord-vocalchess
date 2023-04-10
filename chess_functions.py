@@ -55,6 +55,9 @@ class DiscordChessGame:
         self.black = black
         self.ctx: discord.ApplicationContext
 
+    def __repr__(self):
+        return f"< Chess Game between {self.white.user.name} and {self.black.user.name} >"
+
     def get_board_image(self, size=1800):
         lastmove = ()
 
