@@ -65,7 +65,9 @@ class DiscordChessGame:
             last_move = self.game.move_stack[-1]
             lastmove = (last_move.from_square, last_move.to_square)
 
-        board_img = ChessBoardImage(pieces, self.game.piece_map(), lastmove)
+        mirror = not self.game.turn
+
+        board_img = ChessBoardImage(pieces, self.game.piece_map(), lastmove, mirror)
         img_io = io.BytesIO()
         board_img.img.save(img_io, "jpeg")
         img_io.seek(0)
