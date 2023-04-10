@@ -8,8 +8,8 @@ MY_GUILD = discord.Object(id=1078456129580957779)
 
 class VocalChessClient(discord.Bot):
     engine = stockfish.Stockfish(path="stockfish-windows-2022-x86-64-avx2.exe", depth=15)
-    def __init__(self, intents=discord.Intents.default(), *args, **kwargs):
-        super().__init__()
+    def __init__(self, *args, **kwargs):
+        super().__init__(intents=discord.Intents.default())
         self.games: List[DiscordChessGame] = []
 
     async def on_ready(self):
