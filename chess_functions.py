@@ -79,26 +79,14 @@ class DiscordChessGame:
         string_to_return = "1. _"
         line_ctr = 1
         moves = []
+        # create a temporary game
         tempgame = chess.Board()
+        # push each move to the temp game, getting the san of each move
         for move in self.game.move_stack:
-            # san = ""
-            # if move.drop:
-            #     if move.drop != chess.PAWN:
-            #         san += chess.piece_symbol(move.drop).upper()
-            #     san += move.to_square
-            
-            # if move.promotion:
-            #     san += "=" + move.promotion
-            
-            # if self.game.is_kingside_castling(move):
-            #     san = "O-O"
-            # elif self.game.is_queenside_castling(move):
-            #     san = "O-O-O"
-
-            # capture = self.game.is_capture(move)
             san = tempgame.san_and_push(move)
             moves.append(san)
 
+        # format moves into lines for the embed
         if moves:
             string_to_return = ""
             for i,j in zip(moves[0::2], moves[1::2]):
@@ -112,8 +100,10 @@ class DiscordChessGame:
         return string_to_return
     
     def get_embed(self):
+        """Return a discord embed object representing the chess game"""
         players = f"{self.white.user} ({self.white.elo}) vs. {self.black.user} ({self.black.elo})"
 
+        # formatted move list in san
         moves = self.get_moves()
 
         embed = discord.Embed()

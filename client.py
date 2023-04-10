@@ -7,6 +7,7 @@ import asyncio
 MY_GUILD = discord.Object(id=1078456129580957779)
 
 class VocalChessClient(discord.Bot):
+    # initialize stockfish with depth of 18; only one instance for the whole bot
     engine = stockfish.Stockfish(path="stockfish-windows-2022-x86-64-avx2.exe", depth=18)
     def __init__(self, *args, **kwargs):
         intents = discord.Intents.default()

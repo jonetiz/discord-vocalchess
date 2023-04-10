@@ -1,9 +1,9 @@
 from PIL import Image, ImageDraw, ImageFont
-import time
 
 from chess import Piece, SQUARE_NAMES
 
 def generate_piece_images() -> dict:
+    """Create a dictionary of PIL Image objects corresponding to each chess piece keyed by FEN notation of the piece."""
     out = {}
     spritesheet = Image.open('rsc/chess-sprites.png')
 
@@ -26,8 +26,6 @@ def generate_piece_images() -> dict:
 
 class ChessBoardImage:
     def __init__(self, pieces: dict, board_position: dict, lastmove: tuple = (), mirror = False, size=800, dark: tuple = (110, 109, 107), light: tuple = (144, 143, 141)):
-        # start = time.time()
-
         def get_pixels_of_coords(coordinates: str):
             """Get the pixel location of chess notation coordinates (ie. a8 should return (0,0) and f3 should return ((size/8)*5, (size/8)*5))"""
             out_x = 0
@@ -112,7 +110,9 @@ class ChessBoardImage:
         self.img = Image.new(mode="RGB", size=(size,size), color=(0,0,0))
         board = ImageDraw.Draw(self.img, "RGBA")
 
+        # draw the squares of the chess board
         for i in range(8):
+            # alternate colors based on row
             if i % 2 == 0:
                 board.rectangle(xy = [(i*size/8, 0), ((i*size/8)+size/8, size/8)], fill=light, outline = None)
                 board.rectangle(xy = [(i*size/8, 1*size/8), ((i*size/8)+size/8, 2*size/8)], fill=dark, outline = None)
@@ -136,24 +136,6 @@ class ChessBoardImage:
 
         dark_text = (0,0,0)
         light_text = (255,255,255)
-
-        # for debug: displays full default black setup
-        # self.img.paste(pieces['r'].resize((size//8, size//8)), (0*size//8, 0), pieces['r'].resize((size//8, size//8)))
-        # self.img.paste(pieces['n'].resize((size//8, size//8)), (1*size//8, 0), pieces['n'].resize((size//8, size//8)))
-        # self.img.paste(pieces['b'].resize((size//8, size//8)), (2*size//8, 0), pieces['b'].resize((size//8, size//8)))
-        # self.img.paste(pieces['q'].resize((size//8, size//8)), (3*size//8, 0), pieces['q'].resize((size//8, size//8)))
-        # self.img.paste(pieces['k'].resize((size//8, size//8)), (4*size//8, 0), pieces['k'].resize((size//8, size//8)))
-        # self.img.paste(pieces['b'].resize((size//8, size//8)), (5*size//8, 0), pieces['b'].resize((size//8, size//8)))
-        # self.img.paste(pieces['n'].resize((size//8, size//8)), (6*size//8, 0), pieces['n'].resize((size//8, size//8)))
-        # self.img.paste(pieces['r'].resize((size//8, size//8)), (7*size//8, 0), pieces['r'].resize((size//8, size//8)))
-        # self.img.paste(pieces['p'].resize((size//8, size//8)), (0*size//8, size//8), pieces['p'].resize((size//8, size//8)))
-        # self.img.paste(pieces['p'].resize((size//8, size//8)), (1*size//8, size//8), pieces['p'].resize((size//8, size//8)))
-        # self.img.paste(pieces['p'].resize((size//8, size//8)), (2*size//8, size//8), pieces['p'].resize((size//8, size//8)))
-        # self.img.paste(pieces['p'].resize((size//8, size//8)), (3*size//8, size//8), pieces['p'].resize((size//8, size//8)))
-        # self.img.paste(pieces['p'].resize((size//8, size//8)), (4*size//8, size//8), pieces['p'].resize((size//8, size//8)))
-        # self.img.paste(pieces['p'].resize((size//8, size//8)), (5*size//8, size//8), pieces['p'].resize((size//8, size//8)))
-        # self.img.paste(pieces['p'].resize((size//8, size//8)), (6*size//8, size//8), pieces['p'].resize((size//8, size//8)))
-        # self.img.paste(pieces['p'].resize((size//8, size//8)), (7*size//8, size//8), pieces['p'].resize((size//8, size//8)))
         
         # highlight last move squares
         if lastmove != ():
@@ -186,9 +168,6 @@ class ChessBoardImage:
         board.text(xy = (size//200, 5*size/8), text = "3" if not mirror else "6", align = "center", font = outline_font, fill = light_text)
         board.text(xy = (size//200, 6*size/8), text = "2" if not mirror else "7", align = "center", font = outline_font, fill = dark_text)
         board.text(xy = (size//200, 7*size/8), text = "1" if not mirror else "8", align = "center", font = outline_font, fill = light_text)
-
-        # end = time.time()
-        # print(end - start)
 
 pieces = generate_piece_images()
 
