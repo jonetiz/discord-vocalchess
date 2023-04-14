@@ -47,6 +47,58 @@ def main():
 
     @discord.guild_only()
     @client.command()
+    async def setting(interaction: discord.Interaction, setting: discord.Option(str, choices=GuildInfo().__dict__.keys(), description="The thing you want to change"), value: discord.Option()):
+        """Set a guild configuration setting"""
+        client.set_guild_setting(interaction.guild_id, setting = setting, value = value)
+        await interaction.response.send_message(f"Set {setting} to {value}!", ephemeral=True, delete_after=5)
+
+    @discord.guild_only()
+    @client.command()
+    async def server_settings(interaction: discord.Interaction):
+        """Display the guild configuration"""
+    
+        guild_data: GuildInfo = client.guild_data[interaction.guild_id] if client.guild_data.get(interaction.guild_id) else GuildInfo()
+
+        embed = discord.Embed()
+        embed.set_author(name=f"{interaction.guild.name} - VocalChess Configuration")
+        for field in guild_data.__dict__.keys():
+            embed.add_field(name = field, value = guild_data.__getattribute__(field))
+
+        await interaction.response.send_message(embed = embed, ephemeral=True)
+
+
+    class CPUGameView(discord.ui.View):
+        @discord.ui.button(label="Offer Draw", style=discord.ButtonStyle.primary, emoji="🤝")
+        async def draw_callback(self, button, interaction: discord.Interaction):
+            game: DiscordChessGame = self.game
+            game.end_game(force_draw=True)
+            #await interaction.response.send_message(f"You have offered a draw to {game.white.user.display_name if interaction.user is game.black.user else game.black.user.display_name}.", ephemeral=True)
+            await game.update_message()
+        @discord.ui.button(label="Forfeit", style=discord.ButtonStyle.secondary, emoji="🇫🇷")
+        async def forfeit_callback(self, button, interaction: discord.Interaction):
+            game: DiscordChessGame = self.game
+            game.end_game(forfeit=game.game.turn)
+            await game.update_message()
+        @discord.ui.button(label="Delete", style=discord.ButtonStyle.danger)
+        async def delete_callback(self, button, interaction: discord.Interaction):
+            game: DiscordChessGame = self.game
+            game.end_game(forfeit=game.game.turn)
+            await interaction.message.delete()
+
+    class GameView(discord.ui.View):
+        @discord.ui.button(label="Offer Draw", style=discord.ButtonStyle.success, emoji="🤝")
+        async def draw_callback(self, button, interaction: discord.Interaction):
+            game: DiscordChessGame = self.game
+            other_user = game.white.user if interaction.user is game.black.user else game.black.user
+            await interaction.channel.send(f"{interaction.user.display_name} has offered a draw.")
+            await game.update_message()
+        @discord.ui.button(label="Forfeit", style=discord.ButtonStyle.secondary, emoji="🇫🇷")
+        async def forfeit_callback(self, button, interaction: discord.Interaction):
+            game: DiscordChessGame = self.game
+            game.end_game(forfeit=game.game.turn)
+            await game.update_message()
+
+    @client.command()
     async def challenge_cpu(interaction: discord.Interaction, color: discord.Option(str, choices=['white', 'black']) = 'white', elo: discord.Option(int) = 1500):
         """Challenge the CPU to a chess game."""
 
@@ -58,8 +110,9 @@ def main():
             white_player = ChessPlayer(client.user, elo, bot=True)
             black_player = ChessPlayer(interaction.user)
 
+        channel = await client.create_dm(interaction.user)
         # create chess game instance
-        game = DiscordChessGame(channel = interaction.channel_id, white = white_player, black = black_player)
+        game = DiscordChessGame(channel = channel.id, white = white_player, black = black_player)
 
         # CPU makes first move if player is black
         if color == 'black':
@@ -73,14 +126,16 @@ def main():
 
         # add this game to the games so it can be tracked by the discord bot
         client.games.append(game)
-
-        await interaction.response.send_message(file = e['file'], embed = e['embed'])
+        view = CPUGameView()
+        view.game = game
+        await channel.send(file = e['file'], embed = e['embed'], view=view)
+        await interaction.response.send_message(content = f"A chess game has started in your DMs with this bot!", delete_after = 30, ephemeral = True)
 
         game.ctx = interaction
 
     @discord.guild_only()
     @client.command()
-    async def challenge(interaction: discord.Integration, opponent: discord.Option(discord.User), color: discord.Option(str, choices=['white', 'black']) = 'white'):
+    async def challenge(interaction: discord.Integration, opponent: discord.Option(discord.User), color: discord.Option(str, choices=['white', 'black']) = 'white', public: discord.Option(bool) = True):
         """Challenge another user to a chess game."""
         if color == 'white':
             white_player = ChessPlayer(interaction.user)
@@ -89,13 +144,18 @@ def main():
             white_player = ChessPlayer(opponent)
             black_player = ChessPlayer(interaction.user)
 
-        game = DiscordChessGame(channel = interaction.channel_id, white = white_player, black = black_player)
+        channel = await interaction.guild.create_text_channel(name=f"{white_player.user.display_name} vs {black_player.user.display_name}")
+
+        game = DiscordChessGame(channel = channel.id, white = white_player, black = black_player)
 
         e = game.get_embed()
 
         client.games.append(game)
 
-        await interaction.response.send_message(file = e['file'], embed = e['embed'])
+        view = GameView()
+        view.game = game
+        await channel.send(file = e['file'], embed = e['embed'], view = view)
+        await interaction.response.send_message(content = f"A chess game has started in {channel.mention}!", delete_after = 30, ephemeral = True)
 
         game.ctx = interaction
 

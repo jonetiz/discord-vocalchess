@@ -17,35 +17,39 @@ class ChessPlayer:
         self.draw = draw
 
     def load(self):
-        with sqlite3.connect("database.db") as conn:
-            conn.execute(f"""
-                CREATE TABLE IF NOT EXISTS users (id INT PRIMARY KEY, elo INT, wins INT, loss INT, draw INT)
-            """)
-            conn.commit()
-
-            with conn.execute(f"""
-                    SELECT * FROM users WHERE id = {self.user.id}
-                """) as cursor:
-                results = cursor.fetchone()
-                if results:
-                    self.elo = results[1]
-                    self.wins = results[2]
-                    self.loss = results[3]
-                    self.draw = results[4]
-                    return True
-                else:
-                    return False
+        conn = sqlite3.connect("database.db")
+        cur = conn.cursor()
+        cur.execute(f"""
+            CREATE TABLE IF NOT EXISTS users (id INT PRIMARY KEY, elo INT, wins INT, loss INT, draw INT)
+        """)
+        cur.execute(f"""
+            SELECT * FROM users WHERE id = {self.user.id}
+        """)
+        results = cur.fetchone()
+        cur.close()
+        conn.close()
+        if results:
+            self.elo = results[1]
+            self.wins = results[2]
+            self.loss = results[3]
+            self.draw = results[4]
+            return True
+        else:
+            return False
 
     def save(self):
-        with sqlite3.connect("database.db") as conn:
-            conn.execute(f"""
-                CREATE TABLE IF NOT EXISTS users (id INT PRIMARY KEY, elo INT, wins INT, loss INT, draw INT)
-            """)
-            conn.execute(f"""
-                INSERT INTO users (id, elo, wins, loss, draw) VALUES ({self.user.id}, {self.elo}, {self.wins}, {self.loss}, {self.draw})
-                ON CONFLICT(id) DO UPDATE SET elo = {self.elo}, wins = {self.wins}, loss = {self.loss}, draw = {self.draw} WHERE id = {self.user.id}
-            """)
-            conn.commit()
+        conn = sqlite3.connect("database.db")
+        cur = conn.cursor()
+        cur.execute(f"""
+            CREATE TABLE IF NOT EXISTS users (id INT PRIMARY KEY, elo INT, wins INT, loss INT, draw INT)
+        """)
+        cur.execute(f"""
+            INSERT INTO users (id, elo, wins, loss, draw) VALUES ({self.user.id}, {self.elo}, {self.wins}, {self.loss}, {self.draw})
+            ON CONFLICT(id) DO UPDATE SET elo = {self.elo}, wins = {self.wins}, loss = {self.loss}, draw = {self.draw} WHERE id = {self.user.id}
+        """)
+        conn.commit()
+        cur.close()
+        conn.close()
 
 class DiscordChessGame:
     def __init__(self, channel, white: ChessPlayer, black: ChessPlayer):
@@ -54,6 +58,7 @@ class DiscordChessGame:
         self.white = white
         self.black = black
         self.ctx: discord.ApplicationContext
+        self.outcome = None
 
     def __repr__(self):
         return f"< Chess Game between {self.white.user.name} and {self.black.user.name} >"
@@ -108,7 +113,7 @@ class DiscordChessGame:
 
         embed = discord.Embed()
         embed.set_author(name=f"Chess Game - {players}")
-        outcome = self.game.outcome()
+        outcome = self.outcome
         if outcome:
             if outcome.result() == '1/2-1/2':
                 embed.set_author(name=f"Chess Game - {players} - DRAW")
@@ -127,21 +132,40 @@ class DiscordChessGame:
     
     def get_winner(self) -> bool | ChessPlayer:
         """Return the winning ChessPlayer"""
-        if self.game.is_checkmate():
-            if self.game.turn:
+        if self.game.is_checkmate() or self.outcome:
+            if self.game.turn or not self.outcome.winner:
                 return self.black
             else:
                 return self.white
         else:
             return False
-        
-    def end_game(self) -> bool:
-        """Check if game is over, then recalculate elo of players, update W/L, and save ChessPlayer objects."""
+
+    def get_color(self, player: ChessPlayer) -> chess.Color | None:
+        """Return the color corresponding to a ChessPlayer in this game; returns None if it's not one of the players"""
+        if player is self.white:
+            return chess.WHITE
+        elif player is self.black:
+            return chess.BLACK
+        else:
+            return None
+
+    def end_game(self, force_draw: bool = False, forfeit: chess.Color = None) -> bool:
+        """Check if game is over (or force with force_draw or forfeit), then recalculate elo of players, update W/L, and save ChessPlayer objects."""
         # only end game if it has actually ended
         outcome = self.game.outcome()
+
+        if force_draw:
+            # set outcome to draw
+            outcome = chess.Outcome(chess.Termination.STALEMATE, None)
+
+        if forfeit is not None:
+            # set outcome to forfeit
+            outcome = chess.Outcome(chess.Termination.CHECKMATE, chess.BLACK if forfeit else chess.WHITE)
+
         if outcome:
             # bot games do not affect elo or W/L/D statistics
-            if not self.white.bot and not self.black.bot:
+            #if not self.white.bot and not self.black.bot:
+            if True:
                 for player in (self.black, self.white):
                     other_player: ChessPlayer
                     if player is self.black:
@@ -162,7 +186,7 @@ class DiscordChessGame:
                         k = 10
 
                     # expected_score is 1 / (1+10 * (Rat_B - Rat_A)/400)
-                    expected_score = 1 / (1+10*((other_player.elo - player.elo)/400))
+                    expected_score = 1 ** -(1+10*((other_player.elo - player.elo)/400))
 
                     # elo is calculated from current_elo + k(score - expected score)
                     # where score = 1 for win, 0 for loss, and 0.5 for draw
@@ -171,7 +195,7 @@ class DiscordChessGame:
                         player.elo = round(player.elo + k*(0.5 - expected_score))
                         player.draw += 1
                     else:
-                        if self.get_winner() is player:
+                        if self.get_winner() is player or (forfeit is not None and self.get_color(player) is not forfeit):
                             player.elo = round(player.elo + k*(1 - expected_score))
                             player.wins += 1
                         else:
@@ -181,6 +205,8 @@ class DiscordChessGame:
                     # save player to database
                     player.save()
 
+            self.outcome = outcome
+
             # game is over
             return True
         else:
@@ -189,7 +215,11 @@ class DiscordChessGame:
 
     async def update_message(self):
         e = self.get_embed()
-        await self.ctx.edit(file = e['file'], embed = e['embed'])
+        if self.outcome:
+            # if game is over, get rid of the buttons
+            await self.ctx.edit(file = e['file'], embed = e['embed'], view = None)
+        else:
+            await self.ctx.edit(file = e['file'], embed = e['embed'])
     
     def try_move(self, move: str):
         """Try resolving a move from a string (likely discord message content). Returns True if successful, False if not."""

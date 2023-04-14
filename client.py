@@ -2,18 +2,61 @@ import discord
 from chess_functions import DiscordChessGame
 from typing import List
 import stockfish
+import sqlite3
 import asyncio
 
 MY_GUILD = discord.Object(id=1078456129580957779)
 
+class GuildInfo:
+    """Data structure for holding guild information."""
+    def __init__(self, archive: bool = False, archive_channel: int = 0, category_id: int = 0):
+        self.archive = archive
+        self.archive_channel = archive_channel
+        self.category_id = category_id
+        
+    def update(self, guild_id: int):
+        """Upsert this GuildInfo object into the database"""
+        conn = sqlite3.connect("database.db")
+        cur = conn.cursor()
+        cur.execute(f"""
+            INSERT INTO guilds (id, archive, archive_channel, category_id) VALUES ({guild_id}, {self.archive}, {self.archive_channel}, {self.category_id})
+            ON CONFLICT(id) DO UPDATE SET archive = {self.archive}, archive_channel = {self.archive_channel}, category_id = {self.category_id}
+        """)
+        conn.commit()
+        cur.close()
+        conn.close()
+
 class VocalChessClient(discord.Bot):
     # initialize stockfish with depth of 18; only one instance for the whole bot
     engine = stockfish.Stockfish(path="stockfish-windows-2022-x86-64-avx2.exe", depth=18)
+
     def __init__(self, *args, **kwargs):
         intents = discord.Intents.default()
         intents.message_content = True # required to use message.content in on_message
         super().__init__(intents=intents)
         self.games: List[DiscordChessGame] = []
+        self.guild_data = {}
+
+        conn = sqlite3.connect("database.db")
+        cur = conn.cursor()
+        cur.execute(f"""
+            CREATE TABLE IF NOT EXISTS guilds (id INT PRIMARY KEY, archive INT, archive_channel INT, category_id INT)
+        """)
+        cur.execute(f"""
+            SELECT * FROM guilds
+        """)
+        results = cur.fetchall()
+        cur.close()
+        conn.close()
+
+        for result in results:
+            self.guild_data[result[0]] = GuildInfo(result[1], result[2], result[3])
+
+    def set_guild_setting(self, guild_id: int, setting: str, value):
+        guild_data: GuildInfo = self.guild_data[guild_id] if self.guild_data.get(guild_id) else GuildInfo()
+        guild_data.__setattr__(setting, value)
+        guild_data.update(guild_id)
+        self.guild_data[guild_id] = guild_data
 
     async def on_ready(self):
         print(f'Logged on as {self.user}!')
@@ -26,10 +69,7 @@ class VocalChessClient(discord.Bot):
                 try:
                     game.try_move(message.content)
                 except Exception as e:
-                    msg: discord.Message = await message.reply(f"{e}\nThe /move_help command may help if you are confused.")
-                    await asyncio.sleep(5)
-                    await msg.delete()
-                    await message.delete() 
+                    await message.reply(f"{e}\nThe /move_help command may help if you are confused.", delete_after=5) 
                 else:
                     # if it's a cpu game, make cpu move
                     if game.black.user is self.user or game.white.user is self.user:
