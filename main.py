@@ -66,37 +66,17 @@ def main():
 
         await interaction.response.send_message(embed = embed, ephemeral=True)
 
+    @client.command()
+    async def clear_dms(interaction: discord.Interaction):
+        """Clears the bot DM's; primarily made for OCD debug purposes."""
+        channel = await interaction.user.create_dm()
+        messages = await channel.history().flatten()
+        for message in messages:
+            if message.author.bot:
+                await message.delete()
+        
+        await interaction.response.send_message("Cleared your DMs with the bot!", ephemeral=True, delete_after=5)
 
-    class CPUGameView(discord.ui.View):
-        @discord.ui.button(label="Offer Draw", style=discord.ButtonStyle.primary, emoji="🤝")
-        async def draw_callback(self, button, interaction: discord.Interaction):
-            game: DiscordChessGame = self.game
-            game.end_game(force_draw=True)
-            #await interaction.response.send_message(f"You have offered a draw to {game.white.user.display_name if interaction.user is game.black.user else game.black.user.display_name}.", ephemeral=True)
-            await game.update_message()
-        @discord.ui.button(label="Forfeit", style=discord.ButtonStyle.secondary, emoji="🇫🇷")
-        async def forfeit_callback(self, button, interaction: discord.Interaction):
-            game: DiscordChessGame = self.game
-            game.end_game(forfeit=game.game.turn)
-            await game.update_message()
-        @discord.ui.button(label="Delete", style=discord.ButtonStyle.danger)
-        async def delete_callback(self, button, interaction: discord.Interaction):
-            game: DiscordChessGame = self.game
-            game.end_game(forfeit=game.game.turn)
-            await interaction.message.delete()
-
-    class GameView(discord.ui.View):
-        @discord.ui.button(label="Offer Draw", style=discord.ButtonStyle.success, emoji="🤝")
-        async def draw_callback(self, button, interaction: discord.Interaction):
-            game: DiscordChessGame = self.game
-            other_user = game.white.user if interaction.user is game.black.user else game.black.user
-            await interaction.channel.send(f"{interaction.user.display_name} has offered a draw.")
-            await game.update_message()
-        @discord.ui.button(label="Forfeit", style=discord.ButtonStyle.secondary, emoji="🇫🇷")
-        async def forfeit_callback(self, button, interaction: discord.Interaction):
-            game: DiscordChessGame = self.game
-            game.end_game(forfeit=game.game.turn)
-            await game.update_message()
 
     @client.command()
     async def challenge_cpu(interaction: discord.Interaction, color: discord.Option(str, choices=['white', 'black']) = 'white', elo: discord.Option(int) = 1500):
@@ -128,36 +108,46 @@ def main():
         client.games.append(game)
         view = CPUGameView()
         view.game = game
-        await channel.send(file = e['file'], embed = e['embed'], view=view)
-        await interaction.response.send_message(content = f"A chess game has started in your DMs with this bot!", delete_after = 30, ephemeral = True)
+        view.engine = client.engine
+        ctx = await channel.send(file = e['file'], embed = e['embed'], view=view)
+        game.ctx = ctx
 
-        game.ctx = interaction
+        await interaction.response.send_message(content = f"A chess game has started in your DMs with this bot!", delete_after = 30, ephemeral = True)
 
     @discord.guild_only()
     @client.command()
-    async def challenge(interaction: discord.Integration, opponent: discord.Option(discord.User), color: discord.Option(str, choices=['white', 'black']) = 'white', public: discord.Option(bool) = True):
+    async def challenge(interaction: discord.Interaction, opponent: discord.Option(discord.User), color: discord.Option(str, choices=['white', 'black']) = 'white', public: discord.Option(bool) = True):
         """Challenge another user to a chess game."""
-        if color == 'white':
-            white_player = ChessPlayer(interaction.user)
-            black_player = ChessPlayer(opponent)
-        else:
-            white_player = ChessPlayer(opponent)
-            black_player = ChessPlayer(interaction.user)
+        
+        channel = await client.create_dm(opponent)
+        view = GameOfferView()
+        view.client = client
+        view.interaction = interaction
+        view.opponent = opponent
+        view.color = color
+        view.public = public
+        await channel.send(f"{interaction.user.name} has challenged you to a game of chess in {interaction.guild.name}!", view=view)
+        await interaction.response.send_message(f"You have challenged {opponent.name} to a chess game - they have recieved a DM to accept or decline your request. If they accept, a channel will be created in this server.", ephemeral=True, delete_after=10)
+        # if color == 'white':
+        #     white_player = ChessPlayer(interaction.user)
+        #     black_player = ChessPlayer(opponent)
+        # else:
+        #     white_player = ChessPlayer(opponent)
+        #     black_player = ChessPlayer(interaction.user)
 
-        channel = await interaction.guild.create_text_channel(name=f"{white_player.user.display_name} vs {black_player.user.display_name}")
+        # channel = await interaction.guild.create_text_channel(name=f"{white_player.user.display_name} vs {black_player.user.display_name}", category=client.get_channel(client.guild_data[interaction.guild.id].category_id))
+        # game = DiscordChessGame(channel = channel.id, white = white_player, black = black_player)
 
-        game = DiscordChessGame(channel = channel.id, white = white_player, black = black_player)
+        # e = game.get_embed()
 
-        e = game.get_embed()
+        # client.games.append(game)
 
-        client.games.append(game)
+        # view = GameView()
+        # view.game = game
+        # ctx = await channel.send(file = e['file'], embed = e['embed'], view = view)
+        # game.ctx = ctx
 
-        view = GameView()
-        view.game = game
-        await channel.send(file = e['file'], embed = e['embed'], view = view)
-        await interaction.response.send_message(content = f"A chess game has started in {channel.mention}!", delete_after = 30, ephemeral = True)
-
-        game.ctx = interaction
+        # await interaction.response.send_message(content = f"A chess game has started in {channel.mention}!", delete_after = 30, ephemeral = True)
 
     @discord.guild_only()
     @client.command()

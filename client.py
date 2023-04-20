@@ -1,11 +1,94 @@
 import discord
-from chess_functions import DiscordChessGame
+from chess_functions import DiscordChessGame, ChessPlayer
 from typing import List
 import stockfish
 import sqlite3
-import asyncio
 
-MY_GUILD = discord.Object(id=1078456129580957779)
+class VocalChessView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+        
+
+class CPUGameView(VocalChessView):
+    @discord.ui.button(label="Offer Draw", custom_id="drawoffer_cpu", style=discord.ButtonStyle.primary, emoji="🤝")
+    async def draw_callback(self, button, interaction: discord.Interaction):
+        game: DiscordChessGame = self.game
+        engine: stockfish.Stockfish = self.engine
+        if game.black.bot:
+            # if the evaluation is greater than 500 centipawns (white favor), accept draw
+            if engine.get_evaluation()['value'] > 500:
+                game.end_game(force_draw=True)
+                await interaction.response.send_message("Your draw offer was accepted.", ephemeral=True, delete_after=5)
+                await game.update_message()
+            else:
+                await interaction.response.send_message("Your draw offer was rejected.", ephemeral=True, delete_after=5)
+        else:
+            if engine.get_evaluation()['value'] < -500:
+                game.end_game(force_draw=True)
+                await interaction.response.send_message("Your draw offer was accepted.", ephemeral=True, delete_after=5)
+                await game.update_message()
+            else:
+                await interaction.response.send_message("Your draw offer was rejected.", ephemeral=True, delete_after=5)
+
+    @discord.ui.button(label="Forfeit", custom_id="forfeit_cpu", style=discord.ButtonStyle.secondary, emoji="🇫🇷")
+    async def forfeit_callback(self, button, interaction: discord.Interaction):
+        game: DiscordChessGame = self.game
+        game.end_game(forfeit=game.game.turn)
+        await interaction.response.send_message("You have forfeitted.", ephemeral=True, delete_after=5)
+        await game.update_message()
+
+    @discord.ui.button(label="Delete", custom_id="delete_cpu", style=discord.ButtonStyle.danger)
+    async def delete_callback(self, button, interaction: discord.Interaction):
+        try:
+            game: DiscordChessGame = self.game
+            game.end_game(forfeit=game.game.turn)
+        except:
+            pass
+        await interaction.message.delete()
+
+class GameView(VocalChessView):
+    @discord.ui.button(label="Offer Draw", custom_id="drawoffer", style=discord.ButtonStyle.success, emoji="🤝")
+    async def draw_callback(self, button, interaction: discord.Interaction):
+        game: DiscordChessGame = self.game
+        other_user = game.white.user if interaction.user is game.black.user else game.black.user
+        await interaction.channel.send(f"{interaction.user.display_name} has offered a draw.")
+        await game.update_message()
+    @discord.ui.button(label="Forfeit", custom_id="forfeit", style=discord.ButtonStyle.secondary, emoji="🇫🇷")
+    async def forfeit_callback(self, button, interaction: discord.Interaction):
+        game: DiscordChessGame = self.game
+        game.end_game(forfeit=game.game.turn)
+        await interaction.response.send_message("You have forfeitted.", ephemeral=True, delete_after=5)
+        await game.update_message()
+
+class GameOfferView(VocalChessView):
+    @discord.ui.button(label="Accept Game", custom_id="accept_game", style=discord.ButtonStyle.success)
+    async def accept_callback(self, button, interaction: discord.Interaction):
+        if self.color == 'white':
+            white_player = ChessPlayer(self.interaction.user)
+            black_player = ChessPlayer(self.opponent)
+        else:
+            white_player = ChessPlayer(self.opponent)
+            black_player = ChessPlayer(self.interaction.user)
+
+        channel = await self.interaction.guild.create_text_channel(name=f"{white_player.user.display_name} vs {black_player.user.display_name}", category=self.client.get_channel(self.client.guild_data[self.interaction.guild.id].category_id))
+        game = DiscordChessGame(channel = channel.id, white = white_player, black = black_player)
+
+        e = game.get_embed()
+
+        self.client.games.append(game)
+
+        view = GameView()
+        view.game = game
+        ctx = await channel.send(file = e['file'], embed = e['embed'], view = view)
+        game.ctx = ctx
+
+        await interaction.response.send_message(content = f"A chess game has started in {channel.mention}!", delete_after = 30, ephemeral = True)
+        await self.message.delete()
+
+    @discord.ui.button(label="Decline Game", custom_id="decline_game", style=discord.ButtonStyle.danger)
+    async def decline_callback(self, button, interaction: discord.Interaction):
+        await interaction.response.send_message("You have declined the game offer.", ephemeral=True, delete_after=5)
+        await self.message.delete()
 
 class GuildInfo:
     """Data structure for holding guild information."""
@@ -35,7 +118,7 @@ class VocalChessClient(discord.Bot):
         intents.message_content = True # required to use message.content in on_message
         super().__init__(intents=intents)
         self.games: List[DiscordChessGame] = []
-        self.guild_data = {}
+        self.guild_data: dict[GuildInfo] = {}
 
         conn = sqlite3.connect("database.db")
         cur = conn.cursor()
@@ -60,6 +143,9 @@ class VocalChessClient(discord.Bot):
 
     async def on_ready(self):
         print(f'Logged on as {self.user}!')
+        self.add_view(CPUGameView())
+        self.add_view(GameView())
+        self.add_view(GameOfferView())
         await self.change_presence(activity=discord.Game("Chess"))
 
     async def on_message(self, message: discord.Message):
@@ -94,8 +180,8 @@ class VocalChessClient(discord.Bot):
 
                     # try to end game if it's over
                     game.end_game()
-
-                    await message.delete()
+                    if not game.black.bot and not game.white.bot:
+                        await message.delete()
                     await game.update_message()
 
     async def on_message_delete(self, message: discord.Message):

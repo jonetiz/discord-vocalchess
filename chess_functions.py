@@ -91,6 +91,9 @@ class DiscordChessGame:
             san = tempgame.san_and_push(move)
             moves.append(san)
 
+        if self.outcome:
+            moves.append(self.outcome.result())
+
         # format moves into lines for the embed
         if moves:
             string_to_return = ""
