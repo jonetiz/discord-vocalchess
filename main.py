@@ -156,36 +156,21 @@ def main():
 
         if not voice:
             await interaction.response.send_message("You aren't in a voice channel!", ephemeral=True)
+            return
 
         vc = await voice.channel.connect()
         vc_connections.update({interaction.guild.id: vc})
-
-        async def once_done(sink: discord.sinks, channel: discord.TextChannel, *args):
-            recorded_users = [  # A list of recorded users
-                f"<@{user_id}>"
-                for user_id, audio in sink.audio_data.items()
-            ]
-            await sink.vc.disconnect()  # Disconnect from the voice channel.
-            files = [discord.File(audio.file, f"{user_id}.{sink.encoding}") for user_id, audio in sink.audio_data.items()]  # List down the files.
-            await channel.send(f"finished recording audio for: {', '.join(recorded_users)}.", files=files)  # Send a message with the accumulated files.
-
-        vc.start_recording(
-            discord.sinks.WaveSink(),
-            once_done,
-            interaction.channel
-        )
-
-        await interaction.response.send_message("Started recording!")
+        interaction.response._responded = True
 
     @discord.guild_only()
     @client.command()
-    async def stop_recording(interaction: discord.Interaction):
+    async def leave(interaction: discord.Interaction):
         if interaction.guild.id in vc_connections:  # Check if the guild is in the cache.
             vc = vc_connections[interaction.guild.id]
-            vc.stop_recording()  # Stop recording, and call the callback (once_done).
-            del vc_connections[interaction.guild.id]  # Remove the guild from the cache..
+            await vc.disconnect()
+            del vc_connections[interaction.guild.id]  # Remove the guild from the cache.
         else:
-            await interaction.response.send_message("I am currently not recording here.", ephemeral=True)  # Respond with this if we aren't recording.
+            await interaction.response.send_message("I am currently not in a channel.", ephemeral=True)  # Respond with this if we aren't recording.
 
     client.run(os.getenv('DISCORD_BOT_TOKEN'))
 

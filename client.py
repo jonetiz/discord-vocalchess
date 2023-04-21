@@ -1,4 +1,6 @@
 import discord
+from discord.ext import tasks
+from discord.utils import get
 from chess_functions import DiscordChessGame, ChessPlayer
 from typing import List
 import stockfish
@@ -193,3 +195,7 @@ class VocalChessClient(discord.Bot):
                 if message_id == game.ctx.interaction.id:
                     print(f"Deleted {game}")
                     self.games.remove(game)
+    
+    @tasks.loop(seconds=1)
+    async def check_voice(self):
+        pass
