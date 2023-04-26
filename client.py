@@ -122,6 +122,9 @@ class VocalChessClient(discord.Bot):
         self.games: List[DiscordChessGame] = []
         self.guild_data: dict[GuildInfo] = {}
 
+        self.timer = 0
+        self.sink: discord.sinks.MP3Sink
+
         conn = sqlite3.connect("database.db")
         cur = conn.cursor()
         cur.execute(f"""
