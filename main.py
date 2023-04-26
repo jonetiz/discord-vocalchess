@@ -1,13 +1,13 @@
 from client import *
 import os
 from dotenv import load_dotenv
-from chess_functions import DiscordChessGame, ChessPlayer
+from chess_functions import DiscordChessGame, ChessPlayer, piece_aliases
 import time
 
 import speech_recognition as sr
 from pydub import AudioSegment
-from pydub.silence import split_on_silence
 import io
+import re
 
 def main():
     # load environment variables from .env
@@ -159,7 +159,7 @@ def main():
 
     # speech recognition object
     r = sr.Recognizer()
-    def speech_to_tex(audio_bytes: io.BytesIO | str):
+    def speech_to_text(audio_bytes: io.BytesIO | str):
         """Convert speech to text using google speech recognition."""
 
         # discord passes oddly formatted, we need to resave it
@@ -168,20 +168,29 @@ def main():
         converted_audio = io.BytesIO()
         sound_conversion.export(converted_audio, format='wav')
 
+        text = ""
         with sr.AudioFile(converted_audio) as source:
             try:
                 audio_listened = r.record(source)
                 try:
                     text = r.recognize_google(audio_listened, language = 'en-US', show_all=True)
-                    text = text['alternative'][0]['transcript']
+                    for possibility in text['alternative']:
+                        word_arr = re.split(' |-|_', possibility['transcript'].lower())
+                        for word in word_arr:
+                            if word in piece_aliases.values():
+                                try:
+                                    pass
+                                except:
+                                    pass
                 except sr.UnknownValueError as e:
                     text = "*inaudible*"
+                except Exception as e: 
+                    print(e)
             except:
                 text = ""
 
         return text
-
-    async def process_voice(sink: discord.sinks.MP3Sink, channel, *args):
+    async def process_voice(sink: discord.sinks.MP3Sink, channel, *args, **kwargs):
         """Process voice after recording is stopped"""
         
         print("trying to process voice")
@@ -195,7 +204,7 @@ def main():
 
         if not audio_data: return
 
-        print(speech_to_tex(audio_data))
+        print(speech_to_text(audio_data))
 
     @discord.guild_only()
     @client.command()

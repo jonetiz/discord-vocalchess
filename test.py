@@ -6,7 +6,6 @@ import time
 
 import speech_recognition as sr
 from pydub import AudioSegment
-from pydub.silence import split_on_silence
 import io
 
 #import PyWave as wave
@@ -26,9 +25,7 @@ def speech_to_tex(audio_bytes: io.BytesIO | str):
         try:
             audio_listened = r.record(source)
             try:
-                text = r.recognize_sphinx(audio_listened, language = 'en-US', show_all=True)
-                print(text)
-                #text = text['alternative'][0]['transcript']
+                text = r.recognize_google(audio_listened, language = 'en-US', show_all=True)
             except sr.UnknownValueError as e:
                 text = "*inaudible*"
             except Exception as e: 

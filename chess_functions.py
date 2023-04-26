@@ -7,6 +7,16 @@ from board_image import *
 import sqlite3
 import re
 
+# map chess pieces to their aliases
+piece_aliases = {
+    chess.KING: ["king"],
+    chess.QUEEN: ["queen"],
+    chess.BISHOP: ["bishop"],
+    chess.KNIGHT: ["knight", "nite", "night", "horse"],
+    chess.ROOK: ["rook"],
+    chess.PAWN: ["pawn", "a", "b", "c", "d", "e", "f", "g", "h"]
+}
+
 class ChessPlayer:
     def __init__(self, user: discord.User, elo: int = 1500, wins: int = 0, loss: int = 0, draw: int = 0, bot: bool = False):
         self.user = user
@@ -315,17 +325,6 @@ class DiscordChessGame:
                     for i, name in enumerate(chess.SQUARE_NAMES):
                         if move_arr[-1] == name:
                             move_to = i
-
-
-                # map chess pieces to their aliases
-                piece_aliases = {
-                    chess.KING: ["king"],
-                    chess.QUEEN: ["queen"],
-                    chess.BISHOP: ["bishop"],
-                    chess.KNIGHT: ["knight", "nite", "night", "horse"],
-                    chess.ROOK: ["rook"],
-                    chess.PAWN: ["pawn", "a", "b", "c", "d", "e", "f", "g", "h"]
-                }
                 
                 # a set of squares on which pieces may be moved, populated by piece resolution below
                 candidates_to_move: chess.SquareSet = None
