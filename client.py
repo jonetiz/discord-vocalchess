@@ -5,6 +5,11 @@ from chess_functions import DiscordChessGame, ChessPlayer
 from typing import List
 import stockfish
 import sqlite3
+import time
+
+import speech_recognition as sr
+from pydub import AudioSegment
+import io
 
 class VocalChessView(discord.ui.View):
     def __init__(self):
@@ -64,6 +69,23 @@ class GameView(VocalChessView):
         game.end_game(forfeit=game.game.turn)
         await interaction.response.send_message("You have forfeitted.", ephemeral=True, delete_after=5)
         await game.update_message()
+    @discord.ui.button(label="Join VC", custom_id="join_vc", style=discord.ButtonStyle.primary, emoji="🗣️")
+    async def join_callback(self, button, interaction: discord.Interaction):
+        client: VocalChessClient = self.client
+        
+        # in case it's in progress, stop it
+        client.check_voice.stop()
+
+        voice = interaction.user.voice
+
+        if not voice:
+            await interaction.response.send_message("You aren't in a voice channel!", ephemeral=True)
+            return
+
+        vc = await voice.channel.connect()
+        client.vc_connections.update({interaction.guild.id: vc})
+        client.check_voice.start(interaction, self.game)
+        await interaction.response.send_message("Now listening!", ephemeral=True)
 
 class DrawOfferView(VocalChessView):
     @discord.ui.button(label="Accept Draw", custom_id="accept_draw", style=discord.ButtonStyle.success)
@@ -96,6 +118,7 @@ class GameOfferView(VocalChessView):
         self.client.games.append(game)
 
         view = GameView()
+        view.client = self.client
         view.game = game
         ctx = await channel.send(file = e['file'], embed = e['embed'], view = view)
         game.ctx = ctx
@@ -138,8 +161,13 @@ class VocalChessClient(discord.Bot):
         self.games: List[DiscordChessGame] = []
         self.guild_data: dict[GuildInfo] = {}
 
+        self.vc_connections = {}
         self.timer = 0
-        self.sink: discord.sinks.MP3Sink
+        # speech recognition object
+        self.recognizer = sr.Recognizer()
+        
+        # TODO: Investigate more dynamic way of checking audio, ie. check if user is currently talking
+        # self.sink: discord.sinks.MP3Sink
 
         conn = sqlite3.connect("database.db")
         cur = conn.cursor()
@@ -216,6 +244,66 @@ class VocalChessClient(discord.Bot):
                     print(f"Deleted {game}")
                     self.games.remove(game)
     
-    @tasks.loop(seconds=1)
-    async def check_voice(self):
-        pass
+    @tasks.loop(seconds = 1)
+    async def check_voice(self, interaction: discord.Interaction, game: DiscordChessGame):
+        """
+        Check if Bot detected user voice and give user 
+         x more seconds to talk and then cancels it to 
+         run the callback function "voiceReceiver_callback"
+        """
+        
+        vc = get(self.voice_clients, guild=interaction.guild)
+        if not vc.recording:
+            sink = discord.sinks.MP3Sink(filters={'time': 0})
+            # client.sink = sink
+            self.timer = time.time()
+            # print("started recording") 
+            vc.start_recording(sink, self.process_voice, game)
+
+        # if we're recording, check that 5 seconds have past and target user is not currently talking
+        if vc.recording and (time.time()-self.timer >= 5):
+            # print("stopped recording")
+            vc.stop_recording()
+            self.waiting = False     
+
+    def speech_to_text(self, audio_bytes: io.BytesIO | str):
+        """Convert speech to text using google speech recognition. Gives multiple possibilities."""
+
+        # discord passes oddly formatted, we need to resave it
+        sound_conversion = AudioSegment.from_file(audio_bytes)
+
+        converted_audio = io.BytesIO()
+        sound_conversion.export(converted_audio, format='wav')
+
+        text = ""
+        with sr.AudioFile(converted_audio) as source:
+            try:
+                audio_listened = self.recognizer.record(source)
+                try:
+                    text = self.recognizer.recognize_google(audio_listened, language = 'en-US', show_all=True)
+
+                except sr.UnknownValueError as e:
+                    text = "*inaudible*"
+                except Exception as e: 
+                    print(e)
+            except:
+                text = ""
+
+        return text
+
+    async def process_voice(self, sink: discord.sinks.MP3Sink, game: DiscordChessGame, *args):
+        """Process voice after recording is stopped"""    
+        audio_data: io.BytesIO = None
+
+        for user_id, audio in sink.audio_data.items():
+            # if it's the user we're trying to listen to, set their audiodata to the thingy
+            if user_id == (game.white.user.id if game.game.turn else game.black.user.id):
+                audio_data = audio.file
+
+        if not audio_data: return
+
+        # get possibilities from speech_to_text
+        speech_rec = self.speech_to_text(audio_data)
+
+        # pass the list of possibilities to try_speechrec_move
+        await game.try_speechrec_move(speech_rec)

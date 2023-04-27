@@ -10,7 +10,7 @@ import re
 # map chess pieces to their aliases
 piece_aliases = {
     chess.KING: ["king"],
-    chess.QUEEN: ["queen"],
+    chess.QUEEN: ["queen", "bean", "dean", "wean"],
     chess.BISHOP: ["bishop"],
     chess.KNIGHT: ["knight", "nite", "night", "horse"],
     chess.ROOK: ["rook"],
@@ -234,21 +234,46 @@ class DiscordChessGame:
         else:
             await self.ctx.edit(file = e['file'], embed = e['embed'])
     
-    def try_speechrec_move(self, possibilities: list):
-        filtered_possibilities = []
+    async def try_speechrec_move(self, possibilities: list):
+        """Parse through a list of possibilities for a chess move"""
         for possibility in possibilities['alternative']:
-            word_arr = re.split(' |-|_', possibility['transcript'].lower())
-            for word in word_arr:
-                if word in piece_aliases.values():
-                    filtered_possibilities.append([word, possibility['transcript']])
-
-        if len(filtered_possibilities) < 1:
-            return
-                    
-                        
+            possibility_text = possibility['transcript']
+            move: str = None
+            try:
+                # attempt format for SAN (piece name must be caps, all other lowercase)
+                possibility_text = possibility_text.lower()
+                if len(possibility_text) > 2:
+                    possibility_text = possibility_text.title()
+                self.game.parse_san(possibility_text)
+            except:
+                try:
+                    # attempt format for UCI
+                    possibility_text = possibility_text.lower()
+                    uci = self.game.parse_uci(possibility_text)
+                except:
+                    try:
+                        move = self.resolve_verbose(possibility_text)
+                    except Exception as e:
+                        #print(e)
+                        pass
+                else:
+                    move = self.game.san(uci)
+            else:
+                move = possibility_text
+            if move:
+                # print(move)
+                # try move
+                res = self.try_move(move)
+                if res:
+                    # if move was successful
+                    # attempt to end game
+                    self.end_game()
+                    # update message
+                    await self.update_message()
+                return res
 
     def try_move(self, move: str):
-        """Try resolving a move from a string (likely discord message content). Returns True if successful, False if not."""
+        """Try resolving a move from a string (likely discord message content) and push it. Returns True if successful, False if not."""
         # First try algebraic notation
         try:
             self.game.push_san(move)
@@ -259,9 +284,11 @@ class DiscordChessGame:
             except:
                 # if algebraic and universal chess notation both failed, try resolving using our own methods
                 try:
-                    self.game.push(self.resolve_verbose(move))
-                except:
-                    pass
+                    san = self.resolve_verbose(move)
+                    #print(san)
+                    self.game.push_san(san)
+                except Exception as e:
+                    print(e)
                 else:
                     return True
             else:
@@ -294,7 +321,7 @@ class DiscordChessGame:
                     # if "long", "queen", or "queenside" is designated in the move_arr, do a long castle
                     #print("long castle")
                     try:
-                        self.game.push_san("O-O-O")
+                        self.game.parse_san("O-O-O")
                     except:
                         raise chess.IllegalMoveError('Queen-side castling is not legal in the current position.')
                     else:
@@ -302,7 +329,7 @@ class DiscordChessGame:
                 else:
                     #print("short castle")
                     try:
-                        self.game.push_san("O-O")
+                        self.game.parse_san("O-O")
                     except:
                         raise chess.IllegalMoveError('King-side castling is not legal in the current position.')
                     else:
@@ -340,7 +367,7 @@ class DiscordChessGame:
                 if not move_to_play:
                     raise chess.AmbiguousMoveError(f'There are multiple or no legal en-passants in the current position. Clarify by typing which piece is to play en-passant.')
 
-                return self.game.san_and_push(move_to_play)
+                return self.game.san(move_to_play)
 
         # move_to = square id of last "word" in move_arr, must be a square name
         move_to = None
@@ -381,7 +408,7 @@ class DiscordChessGame:
                                                         # we don't need the first piece of move_arr since that's the piece we want to move, find the other one
                                                         promotion = piece
                                             move_to_play = chess.Move(square, move_to, promotion)
-                                            return self.game.san_and_push(move_to_play)
+                                            return self.game.san(move_to_play)
 
                     break
 
@@ -414,7 +441,7 @@ class DiscordChessGame:
             move = chess.Move(piece_to_move, move_to)
             if self.game.is_legal(move):
                 #print(game.board_fen())
-                return self.game.san_and_push(move)
+                return self.game.san(move)
             else:
                 raise chess.IllegalMoveError(f'Could not move {move_arr[0]} from {chess.SQUARE_NAMES[piece_to_move]} to {chess.SQUARE_NAMES[move_to]}')
         else:
@@ -430,4 +457,4 @@ class DiscordChessGame:
                     else:
                         raise chess.AmbiguousMoveError(f'There are multiple {move_arr[0]}s that can move to {chess.SQUARE_NAMES[move_to]}')
 
-            return self.game.san_and_push(move_to_play)
+            return self.game.san(move_to_play)

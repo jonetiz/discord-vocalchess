@@ -2,18 +2,12 @@ from client import *
 import os
 from dotenv import load_dotenv
 from chess_functions import DiscordChessGame, ChessPlayer, piece_aliases
-import time
-
-import speech_recognition as sr
-from pydub import AudioSegment
-import io
 
 def main():
     # load environment variables from .env
     load_dotenv()
 
     client = VocalChessClient()
-    vc_connections = {}
 
     @client.command()
     async def move_help(interaction: discord.Interaction):
@@ -134,93 +128,19 @@ def main():
         await channel.send(f"{interaction.user.name} has challenged you to a game of chess in {interaction.guild.name}!", view=view)
         await interaction.response.send_message(f"You have challenged {opponent.name} to a chess game - they have recieved a DM to accept or decline your request. If they accept, a channel will be created in this server.", ephemeral=True, delete_after=10)
 
-    @tasks.loop(seconds = 1)
-    async def check_voice(interaction: discord.Interaction, game: DiscordChessGame):
-        """
-        Check if Bot detected user voice and give user 
-         x more seconds to talk and then cancels it to 
-         run the callback function "voiceReceiver_callback"
-        """
-        
-        vc = get(client.voice_clients, guild=interaction.guild)
-        if not vc.recording:
-            sink = discord.sinks.MP3Sink(filters={'time': 0})
-            # client.sink = sink
-            client.timer = time.time()
-            # print("started recording") 
-            vc.start_recording(sink, process_voice, game)
-
-        # if we're recording, check that 5 seconds have past and target user is not currently talking
-        if vc.recording and (time.time()-client.timer >= 5):
-            # print("stopped recording")
-            vc.stop_recording()
-            client.waiting = False     
-
-    # speech recognition object
-    r = sr.Recognizer()
-    def speech_to_text(audio_bytes: io.BytesIO | str):
-        """Convert speech to text using google speech recognition. Gives multiple possibilities."""
-
-        # discord passes oddly formatted, we need to resave it
-        sound_conversion = AudioSegment.from_file(audio_bytes)
-
-        converted_audio = io.BytesIO()
-        sound_conversion.export(converted_audio, format='wav')
-
-        text = ""
-        with sr.AudioFile(converted_audio) as source:
-            try:
-                audio_listened = r.record(source)
-                try:
-                    text = r.recognize_google(audio_listened, language = 'en-US', show_all=True)
-
-                except sr.UnknownValueError as e:
-                    text = "*inaudible*"
-                except Exception as e: 
-                    print(e)
-            except:
-                text = ""
-
-        return text
-
-    async def process_voice(sink: discord.sinks.MP3Sink, game: DiscordChessGame, *args):
-        """Process voice after recording is stopped"""    
-        audio_data: io.BytesIO = None
-
-        for user_id, audio in sink.audio_data.items():
-            # if it's the user we're trying to listen to, set their audiodata to the thingy
-            if user_id == (game.white.user.id if game.game.turn else game.black.user.id):
-                audio_data = audio.file
-
-        if not audio_data: return
-
-        # get possibilities from speech_to_text
-        speech_rec = speech_to_text(audio_data)
-
-        # pass the list of possibilities to try_speechrec_move
-        game.try_speechrec_move(speech_rec)
-        
-    async def join(interaction: discord.Interaction, game: DiscordChessGame):
-        voice = interaction.user.voice
-
-        if not voice:
-            await interaction.response.send_message("You aren't in a voice channel!", ephemeral=True)
-            return
-
-        vc = await voice.channel.connect()
-        vc_connections.update({interaction.guild.id: vc})
-        check_voice.start(interaction, game)
-
     @discord.guild_only()
     @client.command()
+    # require admin to force leave
+    @discord.default_permissions(administrator=True)
     async def leave(interaction: discord.Interaction):
-        if interaction.guild.id in vc_connections:  # Check if the guild is in the cache.
-            vc = vc_connections[interaction.guild.id]
+        """Force the bot to leave any channel in this server it's connected to."""
+        if interaction.guild.id in client.vc_connections:  # Check if the guild is in the cache.
+            vc = client.vc_connections[interaction.guild.id]
             await vc.disconnect()
-            del vc_connections[interaction.guild.id]  # Remove the guild from the cache.
-            check_voice.stop()
+            del client.vc_connections[interaction.guild.id]  # Remove the guild from the cache.
+            client.check_voice.stop()
         else:
-            await interaction.response.send_message("I am currently not in a channel.", ephemeral=True)  # Respond with this if we aren't recording.
+            await interaction.response.send_message("VocalChess is currently not in a channel.", ephemeral=True)  # Respond with this if we aren't recording.
 
     client.run(os.getenv('DISCORD_BOT_TOKEN'))
 
