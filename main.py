@@ -136,7 +136,7 @@ def main():
         await interaction.response.send_message(f"You have challenged {opponent.name} to a chess game - they have recieved a DM to accept or decline your request. If they accept, a channel will be created in this server.", ephemeral=True, delete_after=10)
 
     @tasks.loop(seconds = 1)
-    async def check_voice(interaction: discord.Interaction):
+    async def check_voice(interaction: discord.Interaction, game: DiscordChessGame):
         """
         Check if Bot detected user voice and give user 
          x more seconds to talk and then cancels it to 
@@ -149,7 +149,7 @@ def main():
             # client.sink = sink
             client.timer = time.time()
             # print("started recording") 
-            vc.start_recording(sink, process_voice, vc.channel)
+            vc.start_recording(sink, process_voice, game)
 
         # if we're recording, check that 5 seconds have past and target user is not currently talking
         if vc.recording and (time.time()-client.timer >= 5):
@@ -160,7 +160,7 @@ def main():
     # speech recognition object
     r = sr.Recognizer()
     def speech_to_text(audio_bytes: io.BytesIO | str):
-        """Convert speech to text using google speech recognition."""
+        """Convert speech to text using google speech recognition. Gives multiple possibilities."""
 
         # discord passes oddly formatted, we need to resave it
         sound_conversion = AudioSegment.from_file(audio_bytes)
@@ -174,14 +174,7 @@ def main():
                 audio_listened = r.record(source)
                 try:
                     text = r.recognize_google(audio_listened, language = 'en-US', show_all=True)
-                    for possibility in text['alternative']:
-                        word_arr = re.split(' |-|_', possibility['transcript'].lower())
-                        for word in word_arr:
-                            if word in piece_aliases.values():
-                                try:
-                                    pass
-                                except:
-                                    pass
+
                 except sr.UnknownValueError as e:
                     text = "*inaudible*"
                 except Exception as e: 
@@ -190,21 +183,24 @@ def main():
                 text = ""
 
         return text
-    async def process_voice(sink: discord.sinks.MP3Sink, channel, *args, **kwargs):
-        """Process voice after recording is stopped"""
-        
-        print("trying to process voice")
-        
+
+    async def process_voice(sink: discord.sinks.MP3Sink, game: DiscordChessGame, *args):
+        """Process voice after recording is stopped"""    
         audio_data: io.BytesIO = None
 
         for user_id, audio in sink.audio_data.items():
             # if it's the user we're trying to listen to, set their audiodata to the thingy
-            if user_id == 244508190220353538:
+            if user_id == (game.white.user.id if game.game.turn else game.black.user.id):
                 audio_data = audio.file
 
         if not audio_data: return
 
-        print(speech_to_text(audio_data))
+        # get possibilities from speech_to_text
+        speech_rec = speech_to_text(audio_data)
+
+        # pass the list of possibilities to try_speechrec_move
+        game.try_speechrec_move(speech_rec)
+        
 
     @discord.guild_only()
     @client.command()
@@ -217,7 +213,7 @@ def main():
 
         vc = await voice.channel.connect()
         vc_connections.update({interaction.guild.id: vc})
-        check_voice.start(interaction)
+        check_voice.start(interaction, game)
 
     @discord.guild_only()
     @client.command()
