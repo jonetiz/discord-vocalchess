@@ -9,11 +9,11 @@ import re
 
 # map chess pieces to their aliases
 piece_aliases = {
-    chess.KING: ["king"],
-    chess.QUEEN: ["queen", "bean", "dean", "wean"],
-    chess.BISHOP: ["bishop"],
-    chess.KNIGHT: ["knight", "nite", "night", "horse"],
-    chess.ROOK: ["rook"],
+    chess.KING: ["king", "kings", "bing"],
+    chess.QUEEN: ["queen", "bean", "dean", "wean", "ween", "beanie", "queens", "beans", "deans", "weans", "weens"],
+    chess.BISHOP: ["bishop", "bishops"],
+    chess.KNIGHT: ["knight", "nite", "night", "horse", "nights", "knights", "nites", "horsie"],
+    chess.ROOK: ["rook", "book", "brook", "brooke", "brooks", "brookes", "rooks"],
     chess.PAWN: ["pawn", "a", "b", "c", "d", "e", "f", "g", "h"]
 }
 
@@ -237,7 +237,10 @@ class DiscordChessGame:
     async def try_speechrec_move(self, possibilities: list):
         """Parse through a list of possibilities for a chess move"""
         for possibility in possibilities['alternative']:
+            # TODO: fix error
+            # TODO: gradually remove first word from string to test, in case we picked something up first
             possibility_text = possibility['transcript']
+            print(possibility_text)
             move: str = None
             try:
                 # attempt format for SAN (piece name must be caps, all other lowercase)
