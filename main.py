@@ -7,7 +7,6 @@ import time
 import speech_recognition as sr
 from pydub import AudioSegment
 import io
-import re
 
 def main():
     # load environment variables from .env
@@ -201,10 +200,7 @@ def main():
         # pass the list of possibilities to try_speechrec_move
         game.try_speechrec_move(speech_rec)
         
-
-    @discord.guild_only()
-    @client.command()
-    async def join(interaction: discord.Interaction):
+    async def join(interaction: discord.Interaction, game: DiscordChessGame):
         voice = interaction.user.voice
 
         if not voice:

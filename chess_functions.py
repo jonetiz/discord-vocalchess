@@ -64,7 +64,7 @@ class ChessPlayer:
 class DiscordChessGame:
     def __init__(self, channel, white: ChessPlayer, black: ChessPlayer):
         self.game = chess.Board()
-        self.channel = channel
+        self.channel: discord.TextChannel = channel
         self.white = white
         self.black = black
         self.ctx: discord.ApplicationContext

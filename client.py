@@ -52,8 +52,11 @@ class GameView(VocalChessView):
     @discord.ui.button(label="Offer Draw", custom_id="drawoffer", style=discord.ButtonStyle.success, emoji="🤝")
     async def draw_callback(self, button, interaction: discord.Interaction):
         game: DiscordChessGame = self.game
-        other_user = game.white.user if interaction.user is game.black.user else game.black.user
-        await interaction.channel.send(f"{interaction.user.display_name} has offered a draw.")
+        other_user: discord.User = game.white.user if interaction.user is game.black.user else game.black.user
+        view = DrawOfferView()
+        view.game = game
+        await other_user.send(f"{interaction.user.name} has offered a draw to your game in {interaction.channel}.", view=view)
+        await interaction.response.send_message("You sent a draw offer.", ephemeral=True, delete_after=5)
         await game.update_message()
     @discord.ui.button(label="Forfeit", custom_id="forfeit", style=discord.ButtonStyle.secondary, emoji="🇫🇷")
     async def forfeit_callback(self, button, interaction: discord.Interaction):
@@ -61,6 +64,19 @@ class GameView(VocalChessView):
         game.end_game(forfeit=game.game.turn)
         await interaction.response.send_message("You have forfeitted.", ephemeral=True, delete_after=5)
         await game.update_message()
+
+class DrawOfferView(VocalChessView):
+    @discord.ui.button(label="Accept Draw", custom_id="accept_draw", style=discord.ButtonStyle.success)
+    async def accept_callback(self, button, interaction: discord.Interaction):
+        game: DiscordChessGame = self.game
+        game.end_game(force_draw = True)
+        await game.update_message()
+        await interaction.response.send_message("You have accepted the draw offer.", ephemeral=True, delete_after=5)
+        await self.message.delete()
+    @discord.ui.button(label="Decline Draw", custom_id="decline_draw", style=discord.ButtonStyle.danger)
+    async def decline_callback(self, button, interaction: discord.Interaction):
+        await interaction.response.send_message("You have declined the draw offer.", ephemeral=True, delete_after=5)
+        await self.message.delete()
 
 class GameOfferView(VocalChessView):
     @discord.ui.button(label="Accept Game", custom_id="accept_game", style=discord.ButtonStyle.success)
@@ -150,6 +166,7 @@ class VocalChessClient(discord.Bot):
         print(f'Logged on as {self.user}!')
         self.add_view(CPUGameView())
         self.add_view(GameView())
+        self.add_view(DrawOfferView())
         self.add_view(GameOfferView())
         await self.change_presence(activity=discord.Game("Chess"))
 
